@@ -13,7 +13,7 @@ d = pd.read_csv("dataset.csv", skiprows=0)
 
 # Removed columns not used for modeling
 non_featured_cols = ['track_name', 'track_id', 'explicit', 'artists', 'key','album_name', 'mode',
-                     'speechiness', 'liveness','valence', 'time_signature']
+                     'speechiness', 'liveness','valence', 'time_signature', ]
 
 data = d.drop(non_featured_cols, axis='columns')
 
@@ -34,18 +34,29 @@ X = data.drop(columns=['track_genre', 'track_genre_encoded'])
 X = X.apply(pd.to_numeric, errors='coerce').fillna(0)
 y = data['track_genre_encoded']
 
-# ---------------------------
-# SAMPLING (20% stratified sample)
-X_sample, _, y_sample, _ = train_test_split(X, y, train_size=0.20, stratify=y)
-X = X_sample
-y = y_sample
-# ---------------------------
+# -----------------------------------------------------
+# PROPORTIONAL STRATIFIED SAMPLING
+# -----------------------------------------------------
+frac = 0.15    # kept 15% of rows per genre
 
-# Train-test split
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+sampled_data = data.groupby('track_genre_encoded', group_keys=False).apply(
+    lambda x: x.sample(frac=frac)
+).reset_index(drop=True)
+
+print("Original size:", len(data))
+print("Sampled size:", len(sampled_data))
+
+# -----------------------------------------------------
+# 4. TRAIN / TEST SPLIT with STRATIFICATION
+# -----------------------------------------------------
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, stratify=y
+)
 
 #Model Testing Begins Below
-clf = RandomForestClassifier()
+#-----------------------------------------------------
+
+clf = RandomForestClassifier(n_estimators=50, max_depth=50, class_weight="balanced")
 clf.fit(X_train, y_train)
 y_pred = clf.predict(X_test)
 
@@ -86,8 +97,6 @@ print("GaussianNB - Precision:", np.mean(gnb_scores['test_precision']))
 
 
 #Decision Tree
-
-
 print('NEXT DATA PREDICTION- Decision Tree')
 clf2 = DecisionTreeClassifier()
 
@@ -100,7 +109,7 @@ print("Decision Tree- Accuracy:", np.mean(dt_scores['test_accuracy']))
 print("Decision Tree - Precision:", np.mean(dt_scores['test_precision']))
 
 
-#Complex Classifier Below
+#Complex Classifier Below-Ensemble Learning
 print('NEXT DATA PREDICTION- VOTING(ENSEMBLE LEARNING)')
 eclf1 = VotingClassifier(estimators=[ ('RF', clf), ('GNB', clf1), ('p', clf2)], voting='soft')
 eclf1 = eclf1.fit(X,y)
